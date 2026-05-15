@@ -162,6 +162,7 @@ export default function Workspace() {
           // 1. Add user message
           await Promise.all([
               setDoc(doc(messagesRef, localId), {
+                  userId: user.uid,
                   senderType: "user",
                   senderId: user.uid,
                   senderName: user.name || "User",
@@ -212,6 +213,7 @@ export default function Workspace() {
                   const rep = result.replies[i];
                   // Add agent message
                   await addDoc(messagesRef, {
+                      userId: user.uid,
                       senderType: "agent",
                       senderId: rep.agentId,
                       senderName: rep.agentName,

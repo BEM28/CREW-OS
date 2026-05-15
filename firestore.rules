@@ -6,6 +6,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /{path=**}/messages/{messageId} {
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+
     function isSignedIn() { return request.auth != null; }
     function isUser(uid) { return isSignedIn() && request.auth.uid == uid; }
 

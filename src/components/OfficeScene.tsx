@@ -72,7 +72,7 @@ type AgentAnimationState =
   | "idle" | "walking" | "working" | "sitting" | "speaking" 
   | "listening" | "thinking" | "coffee" | "whiteboard" 
   | "agreeing" | "disagreeing" | "excited" | "concerned" | "pointing"
-  | "typing";
+  | "typing" | "reviewing" | "stretching" | "checking_monitor";
 
 interface AgentReaction {
   type: "NOD" | "SHAKE" | "POINT" | "THINK" | "EXCITED" | "TASK";
@@ -113,9 +113,12 @@ const officeZones = {
 const activityWeights = [
   { act: 'working', weight: 40 },
   { act: 'walking', weight: 10 },
-  { act: 'coffee', weight: 10 },
+  { act: 'coffee', weight: 8 },
   { act: 'whiteboard', weight: 5 },
   { act: 'thinking', weight: 5 },
+  { act: 'reviewing', weight: 10 },
+  { act: 'stretching', weight: 4 },
+  { act: 'checking_monitor', weight: 8 },
   { act: 'idle', weight: 5 }
 ];
 
@@ -130,10 +133,10 @@ function chooseRandomActivity() {
 }
 
 function getZoneForActivity(act: string, baseZone: THREE.Vector3) {
-    if (act === 'working') return new THREE.Vector3(baseZone.x, 0, baseZone.z + 0.8);
-    if (act === 'coffee') return officeZones.coffeeMachine;
-    if (act === 'whiteboard') return officeZones.whiteboard;
-    if (act === 'thinking') return new THREE.Vector3(baseZone.x + (Math.random() * 2 - 1), 0, baseZone.z + 1);
+    if (act === 'working' || act === 'checking_monitor') return new THREE.Vector3(baseZone.x, 0, baseZone.z + 0.7); // Perfect chair alignment
+    if (act === 'coffee') return officeZones.coffeeMachine.clone().add(new THREE.Vector3(0, 0, 0.8)); // Face machine
+    if (act === 'whiteboard') return officeZones.whiteboard.clone().add(new THREE.Vector3(-0.8, 0, 0)); // Face board
+    if (act === 'thinking' || act === 'reviewing' || act === 'stretching') return new THREE.Vector3(baseZone.x + (Math.random() * 2 - 1), 0, baseZone.z + 1.2);
     if (act === 'walking') {
         const keys = Object.keys(officeZones);
         const randomKey = keys[Math.floor(Math.random() * keys.length)];
@@ -204,16 +207,27 @@ function ProceduralAgent({ state }: { state: Agent3DState }) {
             }
         }
 
-        // --- Body Bobbing ---
+        // --- Body Bobbing & Sitting ---
         if (bodyRef.current) {
+            const isSitting = state.currentState === "working" || state.currentState === "sitting" || state.currentState === "checking_monitor";
+            let targetY = isSitting ? 0.35 : 0.5; // Lower for sitting
+            let targetScaleY = 1.0;
+
+            // standing taller for task reaction
+            if (state.reaction?.type === "TASK" && (time - state.reaction.startTime) < 2000) {
+                targetScaleY = 1.05;
+                targetY += 0.05;
+            }
+
             if (greeting) {
-                bodyRef.current.position.y = 0.5 + Math.abs(Math.sin(time * 0.01)) * 0.2;
+                bodyRef.current.position.y = targetY + Math.abs(Math.sin(time * 0.01)) * 0.2;
             } else if (isMoving) {
                 bodyRef.current.position.y = 0.5 + Math.sin(time * 0.012) * 0.08;
             } else {
-                const idleFreq = state.currentState === "working" ? 0.02 : 0.003;
-                bodyRef.current.position.y = 0.5 + Math.sin(time * idleFreq) * 0.02;
+                const idleFreq = (state.currentState === "working" || state.currentState === "checking_monitor") ? 0.02 : 0.003;
+                bodyRef.current.position.y = THREE.MathUtils.lerp(bodyRef.current.position.y, targetY + Math.sin(time * idleFreq) * 0.02, delta * 3);
             }
+            bodyRef.current.scale.y = THREE.MathUtils.lerp(bodyRef.current.scale.y, targetScaleY, delta * 4);
         }
 
         // --- Head & Reaction Logic ---
@@ -236,14 +250,30 @@ function ProceduralAgent({ state }: { state: Agent3DState }) {
                 } else if (type === "EXCITED") {
                     targetHeadX = 0.1 * Math.sin(elapsed * 0.02);
                     targetHeadY = 0.2 * Math.sin(elapsed * 0.01);
+                } else if (type === "TASK") {
+                    targetHeadX = -0.3; // Look up expectantly
+                    targetHeadY = 0.1 * Math.sin(elapsed * 0.005);
                 }
             } else {
                 if (state.currentState === "working") {
                     targetHeadX = 0.2;
                     targetHeadY = 0.1 * Math.sin(time * 0.002);
+                } else if (state.currentState === "checking_monitor") {
+                    targetHeadX = 0.3; // Lean more into screen
+                    targetHeadY = 0.4 * Math.sin(time * 0.004);
+                } else if (state.currentState === "stretching") {
+                    targetHeadX = -0.4; // Look up
+                    targetHeadY = 0.2 * Math.sin(time * 0.001);
                 } else if (state.currentState === "speaking") {
                     targetHeadX = 0.1 * Math.sin(time * 0.01);
                     targetHeadY = 0.2 * Math.sin(time * 0.008);
+                } else if (state.currentState === "coffee") {
+                    const drinkingCycle = Math.sin(time * 0.003);
+                    if (drinkingCycle > 0.5) targetHeadX = 0.3; // Look up when drinking
+                    else targetHeadY = 0.1 * Math.sin(time * 0.002);
+                } else if (state.currentState === "reviewing") {
+                    targetHeadX = 0.15 + Math.sin(time * 0.005) * 0.1;
+                    targetHeadY = 0.3 * Math.sin(time * 0.002);
                 } else if (state.lookAtTarget) {
                     const directionToTarget = state.lookAtTarget.clone().sub(group.current.position);
                     directionToTarget.y = 0;
@@ -267,10 +297,44 @@ function ProceduralAgent({ state }: { state: Agent3DState }) {
                 leftRotX = Math.sin(time * 0.01) * 0.8;
                 rightRotX = -Math.sin(time * 0.01) * 0.8;
             } else if (state.currentState === "working" || state.currentState === "typing") {
-                leftRotX = -1.2 + Math.sin(time * 0.03) * 0.1;
-                rightRotX = -1.2 + Math.cos(time * 0.03) * 0.1;
-                leftRotZ = 0.4;
-                rightRotZ = -0.4;
+                // Typing animation
+                leftRotX = -1.2 + Math.sin(time * 0.05) * 0.15;
+                rightRotX = -1.2 + Math.cos(time * 0.05) * 0.15;
+                leftRotZ = 0.4 + Math.sin(time * 0.08) * 0.05;
+                rightRotZ = -0.4 - Math.cos(time * 0.08) * 0.05;
+            } else if (state.currentState === "coffee") {
+                // Drinking coffee animation
+                const drinkingCycle = Math.sin(time * 0.003);
+                if (drinkingCycle > 0.5) {
+                    // Arm to mouth
+                    rightRotX = -2.2;
+                    rightRotZ = -0.1;
+                } else {
+                    // Holding cup down
+                    rightRotX = -0.8;
+                    rightRotZ = -0.4;
+                }
+            } else if (state.currentState === "whiteboard") {
+                // Gesturing at whiteboard
+                leftRotX = -1.1 + Math.sin(time * 0.005) * 0.2;
+                rightRotX = -1.8 + Math.sin(time * 0.01) * 0.4; // Reach out more
+                rightRotZ = -0.3;
+            } else if (state.currentState === "reviewing") {
+                // Interactive hologram animation
+                leftRotX = -1.2 + Math.sin(time * 0.003) * 0.2;
+                rightRotX = -1.2 + Math.cos(time * 0.003) * 0.2;
+                leftRotZ = 0.5;
+                rightRotZ = -0.5;
+            } else if (state.currentState === "stretching") {
+                leftRotX = 0.5 + Math.sin(time * 0.002) * 0.5;
+                rightRotX = 0.5 + Math.sin(time * 0.002) * 0.5;
+                leftRotZ = 2.0;
+                rightRotZ = -2.0;
+            } else if (state.currentState === "checking_monitor") {
+                leftRotX = -1.4;
+                rightRotX = -1.4;
+                leftRotZ = 0.1;
+                rightRotZ = -0.1;
             } else if (state.currentState === "speaking" || state.isSpeaking) {
                 leftRotX = -0.5 + Math.sin(time * 0.008) * 0.4;
                 rightRotX = -0.5 + Math.cos(time * 0.008) * 0.4;
@@ -284,16 +348,14 @@ function ProceduralAgent({ state }: { state: Agent3DState }) {
                 rightRotX = -1.0;
                 leftRotZ = 0.5;
                 rightRotZ = -0.5;
-            } else if (state.currentState === "coffee") {
-                rightRotX = -1.1;
-                rightRotZ = -0.3;
-                rightArmRef.current.position.y = 0.8 + Math.sin(time * 0.002) * 0.05;
             }
 
-            leftArmRef.current.rotation.x = THREE.MathUtils.lerp(leftArmRef.current.rotation.x, leftRotX, delta * 8);
-            rightArmRef.current.rotation.x = THREE.MathUtils.lerp(rightArmRef.current.rotation.x, rightRotX, delta * 8);
-            leftArmRef.current.rotation.z = THREE.MathUtils.lerp(leftArmRef.current.rotation.z, leftRotZ, delta * 8);
-            rightArmRef.current.rotation.z = THREE.MathUtils.lerp(rightArmRef.current.rotation.z, rightRotZ, delta * 8);
+            if (leftArmRef.current && rightArmRef.current) {
+                leftArmRef.current.rotation.x = THREE.MathUtils.lerp(leftArmRef.current.rotation.x, leftRotX, delta * 8);
+                rightArmRef.current.rotation.x = THREE.MathUtils.lerp(rightArmRef.current.rotation.x, rightRotX, delta * 8);
+                leftArmRef.current.rotation.z = THREE.MathUtils.lerp(leftArmRef.current.rotation.z, leftRotZ, delta * 8);
+                rightArmRef.current.rotation.z = THREE.MathUtils.lerp(rightArmRef.current.rotation.z, rightRotZ, delta * 8);
+            }
         }
     });
 
@@ -318,6 +380,13 @@ function ProceduralAgent({ state }: { state: Agent3DState }) {
                 <mesh ref={rightArmRef} position={[0.25, 0.2, 0]} castShadow>
                     <boxGeometry args={[0.08, 0.4, 0.08]} />
                     <meshStandardMaterial color={state.color} />
+                    {/* Optional Cup model for coffee */}
+                    {state.currentState === "coffee" && (
+                        <mesh position={[0, -0.2, 0.1]}>
+                            <cylinderGeometry args={[0.05, 0.04, 0.12, 8]} />
+                            <meshStandardMaterial color="#ffffff" />
+                        </mesh>
+                    )}
                 </mesh>
             </group>
 
@@ -347,6 +416,27 @@ function ProceduralAgent({ state }: { state: Agent3DState }) {
                          state.reaction.type === "EXCITED" ? "🔥" :
                          state.reaction.type === "POINT" ? "👉" : "📋"}
                     </Text>
+                </group>
+            )}
+
+            {/* Personal HUD/Hologram */}
+            {state.currentState === "reviewing" && (
+                <group position={[0, 1.1, 0.4]} rotation={[-0.2, 0, 0]}>
+                    <mesh>
+                        <planeGeometry args={[0.8, 0.5]} />
+                        <meshBasicMaterial color="#0ea5e9" transparent opacity={0.1} side={THREE.DoubleSide} />
+                    </mesh>
+                    <mesh position={[0, 0, -0.01]}>
+                        <planeGeometry args={[0.82, 0.52]} />
+                        <meshBasicMaterial color="#38bdf8" transparent opacity={0.05} side={THREE.DoubleSide} wireframe />
+                    </mesh>
+                    {/* Floating data dots */}
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <mesh key={i} position={[(Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.3, 0.02]}>
+                            <sphereGeometry args={[0.01, 8, 8]} />
+                            <meshBasicMaterial color="#7c3aed" />
+                        </mesh>
+                    ))}
                 </group>
             )}
 
@@ -435,6 +525,11 @@ export function OfficeScene({ agents, projectSelectedAgents, messages }: OfficeS
                         next[a2].currentState = "listening";
                         next[a2].lookAtTarget = next[a1].position;
                         next[a2].lastActivityTime = now + 5000;
+
+                        // Add a small chance for a nod reaction during interaction
+                        if (Math.random() < 0.5) {
+                            next[a2].reaction = { type: "NOD", startTime: performance.now() + 1000, duration: 2000 };
+                        }
                     }
                     return next;
                 }
@@ -444,13 +539,24 @@ export function OfficeScene({ agents, projectSelectedAgents, messages }: OfficeS
                     // don't interrupt meeting or active speaking
                     if (state.currentState !== 'speaking' && state.currentState !== 'listening' && (now - state.lastActivityTime > 8000)) {
                         if (!state.targetPosition || state.position.distanceTo(state.targetPosition) < 0.2) {
-                            if (Math.random() < 0.3) { 
-                                const baseZone = getDefaultZoneByRole(state.role);
-                                const act = chooseRandomActivity();
-                                state.targetPosition = getZoneForActivity(act, baseZone).clone();
-                                state.currentState = act as any;
-                                state.lastActivityTime = now;
-                            }
+                                if (Math.random() < 0.3) { 
+                                    const baseZone = getDefaultZoneByRole(state.role);
+                                    const act = chooseRandomActivity();
+                                    state.targetPosition = getZoneForActivity(act, baseZone).clone();
+                                    state.currentState = act as any;
+                                    state.lastActivityTime = now;
+
+                                    // Set lookAt targets for specific activities
+                                    if (act === 'working') {
+                                        state.lookAtTarget = baseZone.clone(); // Look at desk/monitor
+                                    } else if (act === 'coffee') {
+                                        state.lookAtTarget = officeZones.coffeeMachine.clone();
+                                    } else if (act === 'whiteboard') {
+                                        state.lookAtTarget = officeZones.whiteboard.clone();
+                                    } else {
+                                        state.lookAtTarget = null;
+                                    }
+                                }
                         }
                     }
                 }
@@ -573,27 +679,38 @@ export function OfficeScene({ agents, projectSelectedAgents, messages }: OfficeS
             <CameraController target={camFocusTarget} focus={camFocusActive} />
             <ambientLight intensity={0.6} />
             <directionalLight position={[10, 10, 5]} intensity={1.5} castShadow shadow-mapSize={[1024, 1024]} />
-            <Environment preset="city" />
+            <Environment preset="studio" />
             
             {/* Floor */}
             <mesh position={[0, -0.05, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
                 <planeGeometry args={[20, 15]} />
                 <meshStandardMaterial color="#0B0D14" roughness={0.8} />
             </mesh>
+            {/* Grid Overlay */}
+            <gridHelper args={[20, 20, "#1e293b", "#0f172a"]} position={[0, -0.04, 0]} />
 
             {/* Whiteboard with markers */}
             {Object.entries(officeZones).map(([key, pos]) => {
                 if (key === 'whiteboard') {
                      return (
                          <group key={key} position={[pos.x, 0, pos.z]}>
-                            <mesh position={[0, 1.2, 0]} castShadow receiveShadow>
-                                <boxGeometry args={[0.1, 1.5, 2]} />
-                                <meshStandardMaterial color="#f8fafc" />
+                            <mesh position={[0, 1.25, 0]} castShadow receiveShadow>
+                                <boxGeometry args={[0.08, 1.8, 2.5]} />
+                                <meshStandardMaterial color="#f8fafc" roughness={0.1} />
+                            </mesh>
+                            {/* Board frame */}
+                            <mesh position={[0, 1.25, 1.25]}>
+                                <boxGeometry args={[0.12, 1.9, 0.05]} />
+                                <meshStandardMaterial color="#334155" />
+                            </mesh>
+                            <mesh position={[0, 1.25, -1.25]}>
+                                <boxGeometry args={[0.12, 1.9, 0.05]} />
+                                <meshStandardMaterial color="#334155" />
                             </mesh>
                             {/* Marker ledge */}
-                            <mesh position={[0.08, 0.45, 0]}>
-                                <boxGeometry args={[0.1, 0.05, 1.8]} />
-                                <meshStandardMaterial color="#334155" />
+                            <mesh position={[0.08, 0.35, 0]}>
+                                <boxGeometry args={[0.2, 0.04, 2.3]} />
+                                <meshStandardMaterial color="#1e293b" />
                             </mesh>
                          </group>
                      );
@@ -601,42 +718,160 @@ export function OfficeScene({ agents, projectSelectedAgents, messages }: OfficeS
                 if (key === 'coffeeMachine') {
                     return (
                         <group key={key} position={pos}>
-                            <mesh position={[0, 0.5, 0]}>
-                                <boxGeometry args={[0.6, 1.0, 0.6]} />
-                                <meshStandardMaterial color="#1e293b" />
+                            {/* Countertop */}
+                            <mesh position={[0, 0.45, 0]} castShadow receiveShadow>
+                                <boxGeometry args={[1.2, 0.9, 0.8]} />
+                                <meshStandardMaterial color="#0f172a" />
                             </mesh>
-                            <mesh position={[0, 0.8, 0.35]}>
-                                <boxGeometry args={[0.4, 0.1, 0.2]} />
-                                <meshStandardMaterial color="#475569" />
+                            {/* Machine body */}
+                            <mesh position={[0, 1.1, 0]} castShadow>
+                                <boxGeometry args={[0.5, 0.4, 0.4]} />
+                                <meshStandardMaterial color="#334155" />
                             </mesh>
-                            <Text position={[0, 1.1, 0.31]} fontSize={0.1} color="white">COFFEE</Text>
+                            {/* Glowing light */}
+                            <mesh position={[0, 1.1, 0.21]}>
+                                <planeGeometry args={[0.2, 0.1]} />
+                                <meshBasicMaterial color="#38bdf8" />
+                            </mesh>
+                            <Text position={[0, 1.4, 0.25]} fontSize={0.15} color="white">BREW OS</Text>
                         </group>
                     )
                 }
                 if (key === 'meetingTable') {
                      return (
-                         <mesh key={key} position={[pos.x, 0.4, pos.z]} castShadow receiveShadow>
-                             <cylinderGeometry args={[1, 1, 0.8, 16]} />
-                             <meshStandardMaterial color="#1f2937" />
-                         </mesh>
+                         <group key={key} position={[pos.x, 0, pos.z]}>
+                            {/* Table base */}
+                            <mesh position={[0, 0.3, 0]} castShadow>
+                                <cylinderGeometry args={[0.3, 0.4, 0.6, 8]} />
+                                <meshStandardMaterial color="#1e293b" />
+                            </mesh>
+                            {/* Table Top */}
+                            <mesh position={[0, 0.7, 0]} castShadow receiveShadow>
+                                <cylinderGeometry args={[1.8, 1.8, 0.1, 32]} />
+                                <meshStandardMaterial color="#0f172a" roughness={0.2} metalness={0.1} />
+                            </mesh>
+                            {/* Hub glow */}
+                            <mesh position={[0, 0.76, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                                <circleGeometry args={[0.4, 32]} />
+                                <meshBasicMaterial color="#7c3aed" transparent opacity={0.2} />
+                            </mesh>
+                            {/* Holographic display when speaking */}
+                            {camFocusActive && (
+                                <group position={[0, 1.2, 0]}>
+                                    <mesh>
+                                        <cylinderGeometry args={[0.6, 0.6, 1.0, 16, 1, true]} />
+                                        <meshBasicMaterial color="#38bdf8" transparent opacity={0.1} wireframe />
+                                    </mesh>
+                                    <mesh rotation={[0, performance.now() * 0.001, 0]}>
+                                        <torusGeometry args={[0.5, 0.01, 8, 32]} />
+                                        <meshBasicMaterial color="#7c3aed" transparent opacity={0.4} />
+                                    </mesh>
+                                    <mesh position={[0, -0.3, 0]} rotation={[0, -performance.now() * 0.0005, 0]}>
+                                        <torusGeometry args={[0.55, 0.005, 8, 32]} />
+                                        <meshBasicMaterial color="#0ea5e9" transparent opacity={0.3} />
+                                    </mesh>
+                                </group>
+                            )}
+                         </group>
                      );
                 }
                 if (key.includes('Desk')) {
                      return (
                          <group key={key} position={pos}>
-                           <mesh position={[0, 0.4, 0]} castShadow receiveShadow>
-                               <boxGeometry args={[1.5, 0.8, 0.8]} />
-                               <meshStandardMaterial color="#111827" />
+                           {/* Desk Surface */}
+                           <mesh position={[0, 0.7, 0]} castShadow receiveShadow>
+                               <boxGeometry args={[1.8, 0.08, 1]} />
+                               <meshStandardMaterial color="#1e293b" />
                            </mesh>
-                           <mesh position={[0, 1.0, 0.1]} rotation={[0, Math.PI, 0]} castShadow>
-                               <boxGeometry args={[0.8, 0.5, 0.05]} />
-                               <meshStandardMaterial color="#000000" />
+                           {/* Legs */}
+                           <mesh position={[-0.8, 0.35, -0.4]} castShadow>
+                               <boxGeometry args={[0.05, 0.7, 0.05]} />
+                               <meshStandardMaterial color="#334155" />
                            </mesh>
+                           <mesh position={[0.8, 0.35, -0.4]} castShadow>
+                               <boxGeometry args={[0.05, 0.7, 0.05]} />
+                               <meshStandardMaterial color="#334155" />
+                           </mesh>
+                           <mesh position={[-0.8, 0.35, 0.4]} castShadow>
+                               <boxGeometry args={[0.05, 0.7, 0.05]} />
+                               <meshStandardMaterial color="#334155" />
+                           </mesh>
+                           <mesh position={[0.8, 0.35, 0.4]} castShadow>
+                               <boxGeometry args={[0.05, 0.7, 0.05]} />
+                               <meshStandardMaterial color="#334155" />
+                           </mesh>
+                           
+                           {/* Monitor */}
+                           <group position={[0, 0.74, -0.2]}>
+                               <mesh position={[0, 0.05, 0]}>
+                                   <boxGeometry args={[0.15, 0.1, 0.1]} />
+                                   <meshStandardMaterial color="#0f172a" />
+                               </mesh>
+                               <mesh position={[0, 0.3, 0]} castShadow>
+                                   <boxGeometry args={[0.9, 0.5, 0.04]} />
+                                   <meshStandardMaterial color="#020617" />
+                               </mesh>
+                               {/* Glowing Screen */}
+                               <mesh position={[0, 0.3, 0.021]}>
+                                   <planeGeometry args={[0.85, 0.45]} />
+                                   <meshBasicMaterial color="#0ea5e9" transparent opacity={0.3} />
+                               </mesh>
+                           </group>
+
+                           {/* Task Chair */}
+                           <group position={[0, 0, 0.7]} rotation={[0, Math.PI, 0]}>
+                                <mesh position={[0, 0.15, 0]}>
+                                    <cylinderGeometry args={[0.04, 0.04, 0.3]} />
+                                    <meshStandardMaterial color="#334155" />
+                                </mesh>
+                                <mesh position={[0, 0.45, 0]} castShadow>
+                                    <boxGeometry args={[0.5, 0.1, 0.5]} />
+                                    <meshStandardMaterial color="#0f172a" />
+                                </mesh>
+                                <mesh position={[0, 0.8, -0.2]} rotation={[0.1, 0, 0]} castShadow>
+                                    <boxGeometry args={[0.5, 0.6, 0.08]} />
+                                    <meshStandardMaterial color="#0f172a" />
+                                </mesh>
+                           </group>
                          </group>
                      );
                 }
                 return null;
             })}
+
+            {/* Architectural elements */}
+            <group position={[0, 0, -6]}>
+                {/* Back Wall (Server Racks) */}
+                <mesh position={[-4, 1, 0]}>
+                    <boxGeometry args={[3, 2, 0.8]} />
+                    <meshStandardMaterial color="#0f172a" />
+                </mesh>
+                <mesh position={[-4, 1, 0.41]}>
+                    <planeGeometry args={[2.5, 1.5]} />
+                    <meshBasicMaterial color="#1e293b" />
+                </mesh>
+                {/* Server lights */}
+                {Array.from({ length: 12 }).map((_, i) => (
+                    <mesh key={i} position={[-4 + (Math.random() - 0.5) * 2, 1 + (Math.random() - 0.5) * 1.5, 0.42]}>
+                        <sphereGeometry args={[0.025, 8, 8]} />
+                        <meshBasicMaterial color={Math.random() > 0.5 ? "#22c55e" : "#ef4444"} />
+                    </mesh>
+                ))}
+            </group>
+
+            {/* Plants */}
+            {[[7, 0, -3], [-7, 0, -4.5], [8.5, 0, 5], [-8, 0, 3]].map((pos, i) => (
+                <group key={i} position={[pos[0], pos[1], pos[2]]}>
+                    <mesh position={[0, 0.2, 0]}>
+                        <cylinderGeometry args={[0.3, 0.22, 0.4, 16]} />
+                        <meshStandardMaterial color="#1e293b" />
+                    </mesh>
+                    <mesh position={[0, 0.65, 0]} rotation={[0.2, 0, 0]}>
+                        <sphereGeometry args={[0.4, 8, 8]} />
+                        <meshStandardMaterial color="#166534" />
+                    </mesh>
+                </group>
+            ))}
 
             {Object.values(agentStates).map(state => (
                 <ProceduralAgent key={state.id} state={state} />

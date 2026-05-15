@@ -131,9 +131,6 @@ export default function Dashboard() {
                   </div>
                 )}
               </div>
-              <Link to="/crew" className="text-sm text-text-secondary hover:text-text-primary flex items-center gap-1">
-                Manage <ArrowRight className="w-4 h-4" />
-              </Link>
             </div>
             <div className="grid grid-cols-2 gap-3">
               {agents.map(a => (

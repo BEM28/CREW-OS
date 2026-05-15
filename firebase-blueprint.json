@@ -102,6 +102,7 @@
       "description": "Chat message in session",
       "type": "object",
       "properties": {
+        "userId": { "type": "string" },
         "senderType": { "type": "string", "enum": ["user", "agent", "system"] },
         "senderId": { "type": "string" },
         "senderName": { "type": "string" },

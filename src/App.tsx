@@ -9,6 +9,11 @@ import Landing from './pages/Landing';
 import Dashboard from './pages/Dashboard';
 import Onboarding from './pages/onboarding/Onboarding';
 import Workspace from './pages/Workspace';
+import Crew from './pages/Crew';
+import Projects from './pages/Projects';
+import Settings from './pages/Settings';
+import Sessions from './pages/Sessions';
+import Deliverables from './pages/Deliverables';
 
 function generateSkeleton() {
   return (
@@ -131,11 +136,11 @@ export default function App() {
             <Route path="/workspace/:companyId/:projectId" element={<ProtectedRoute><Workspace /></ProtectedRoute>} />
             
             {/* Nav Links placeholders */}
-            <Route path="/projects" element={<ProtectedRoute><PlaceholderPage title="Projects" /></ProtectedRoute>} />
-            <Route path="/crew" element={<ProtectedRoute><PlaceholderPage title="Crew" /></ProtectedRoute>} />
-            <Route path="/sessions" element={<ProtectedRoute><PlaceholderPage title="Sessions" /></ProtectedRoute>} />
-            <Route path="/deliverables" element={<ProtectedRoute><PlaceholderPage title="Deliverables" /></ProtectedRoute>} />
-            <Route path="/settings" element={<ProtectedRoute><PlaceholderPage title="Settings" /></ProtectedRoute>} />
+            <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
+            <Route path="/crew" element={<ProtectedRoute><Crew /></ProtectedRoute>} />
+            <Route path="/sessions" element={<ProtectedRoute><Sessions /></ProtectedRoute>} />
+            <Route path="/deliverables" element={<ProtectedRoute><Deliverables /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
