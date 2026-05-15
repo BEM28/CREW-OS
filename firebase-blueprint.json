@@ -1,0 +1,198 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and session data",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "photoURL": { "type": ["string", "null"] },
+        "onboardingComplete": { "type": "boolean" },
+        "activeCompanyId": { "type": ["string", "null"] },
+        "activeProjectId": { "type": ["string", "null"] },
+        "lastSessionId": { "type": ["string", "null"] },
+        "lastWorkspaceVisited": { "type": ["string", "null"] },
+        "createdAt": { "type": "object" },
+        "lastLoginAt": { "type": "object" }
+      },
+      "required": ["uid", "name", "email", "onboardingComplete"]
+    },
+    "Agent": {
+      "title": "Agent",
+      "description": "Reusable AI crew member",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "roleEmoji": { "type": "string" },
+        "encryptedKey": { "type": "string" },
+        "keyPreview": { "type": "string" },
+        "personalityNotes": { "type": "string" },
+        "basePersonality": { "type": "string" },
+        "accentColor": { "type": "string" },
+        "temperature": { "type": "number" },
+        "defaultEmotion": { "type": "string", "enum": ["HYPED", "FOCUSED", "SKEPTICAL"] },
+        "createdAt": { "type": "object" },
+        "updatedAt": { "type": "object" },
+        "lastUsedAt": { "type": ["object", "null"] },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "name", "role", "encryptedKey", "isActive"]
+    },
+    "Company": {
+      "title": "Company",
+      "description": "User's company",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "companyName": { "type": "string" },
+        "industry": { "type": "string" },
+        "userRole": { "type": "string" },
+        "description": { "type": "string" },
+        "logo": { "type": ["string", "null"] },
+        "createdAt": { "type": "object" },
+        "updatedAt": { "type": "object" },
+        "preferredAgents": { "type": "array", "items": { "type": "string" } },
+        "defaultWorkflow": { "type": ["string", "null"] }
+      },
+      "required": ["id", "companyName", "industry", "userRole"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Company project",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "archived"] },
+        "selectedAgents": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "object" },
+        "updatedAt": { "type": "object" },
+        "lastOpenedAt": { "type": ["object", "null"] },
+        "currentWorkflow": { "type": ["string", "null"] },
+        "meetingEnergy": { "type": "number" },
+        "projectSummary": { "type": "string" }
+      },
+      "required": ["id", "name", "description", "status"]
+    },
+    "Session": {
+      "title": "Session",
+      "description": "Workspace session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "createdAt": { "type": "object" },
+        "updatedAt": { "type": "object" },
+        "endedAt": { "type": ["object", "null"] },
+        "participants": { "type": "array", "items": { "type": "string" } },
+        "workflowState": { "type": "string" },
+        "messageCount": { "type": "number" },
+        "lastMessage": { "type": ["string", "null"] },
+        "lastMessageAt": { "type": ["object", "null"] }
+      },
+      "required": ["id", "title", "createdAt", "updatedAt", "messageCount"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Chat message in session",
+      "type": "object",
+      "properties": {
+        "senderType": { "type": "string", "enum": ["user", "agent", "system"] },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "role": { "type": "string" },
+        "content": { "type": "string" },
+        "emotion": { "type": "string", "enum": ["HYPED", "FOCUSED", "SKEPTICAL"] },
+        "timestamp": { "type": "object" }
+      },
+      "required": ["senderType", "senderId", "senderName", "content", "timestamp"]
+    },
+    "Deliverable": {
+      "title": "Deliverable",
+      "description": "Agent-generated document",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "createdByRole": { "type": "string" },
+        "content": { "type": "string" },
+        "timestamp": { "type": "object" }
+      },
+      "required": ["id", "title", "type", "createdBy", "content", "timestamp"]
+    },
+    "Snapshot": {
+      "title": "Snapshot",
+      "description": "Project context snapshot",
+      "type": "object",
+      "properties": {
+        "summary": { "type": "string" },
+        "decisionsMade": { "type": "array", "items": { "type": "string" } },
+        "unresolvedIssues": { "type": "array", "items": { "type": "string" } },
+        "sprintStatus": { "type": "string" },
+        "teamMood": { "type": "string" },
+        "generatedAt": { "type": "object" }
+      },
+      "required": ["summary", "generatedAt"]
+    },
+    "AgentMemory": {
+      "title": "AgentMemory",
+      "description": "Project-specific agent memory",
+      "type": "object",
+      "properties": {
+        "shortTermMemory": { "type": "array" },
+        "longTermSummary": { "type": "string" },
+        "emotionalState": { "type": "string", "enum": ["HYPED", "FOCUSED", "SKEPTICAL"] },
+        "relationshipState": { "type": "object" },
+        "projectKnowledge": { "type": "array", "items": { "type": "string" } },
+        "unresolvedConcerns": { "type": "array", "items": { "type": "string" } },
+        "updatedAt": { "type": "object" }
+      },
+      "required": ["shortTermMemory", "longTermSummary", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profile"
+    },
+    "/users/{userId}/agents/{agentId}": {
+      "schema": { "$ref": "#/entities/Agent" },
+      "description": "User's AI agents globally"
+    },
+    "/users/{userId}/companies/{companyId}": {
+      "schema": { "$ref": "#/entities/Company" },
+      "description": "User's companies"
+    },
+    "/users/{userId}/companies/{companyId}/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/Project" },
+      "description": "Company projects"
+    },
+    "/users/{userId}/companies/{companyId}/projects/{projectId}/sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/Session" },
+      "description": "Project sessions (workspace chats)"
+    },
+    "/users/{userId}/companies/{companyId}/projects/{projectId}/sessions/{sessionId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/Message" },
+      "description": "Session chat messages"
+    },
+    "/users/{userId}/companies/{companyId}/projects/{projectId}/deliverables/{deliverableId}": {
+      "schema": { "$ref": "#/entities/Deliverable" },
+      "description": "Generated project deliverables"
+    },
+    "/users/{userId}/companies/{companyId}/projects/{projectId}/snapshots/{snapshotId}": {
+      "schema": { "$ref": "#/entities/Snapshot" },
+      "description": "Periodic project context snapshots"
+    },
+    "/users/{userId}/companies/{companyId}/projects/{projectId}/agentMemory/{agentId}": {
+      "schema": { "$ref": "#/entities/AgentMemory" },
+      "description": "Agent state and memory specific to this project"
+    }
+  }
+}
