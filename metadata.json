@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Crew OS",
+  "description": "An interactive 3D virtual office where AI agents collaborate and react in real-time.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
